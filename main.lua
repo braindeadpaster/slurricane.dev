@@ -38,9 +38,9 @@ local function getPlayerNames()
 end
 
 local Window = WindUI:CreateWindow({
-    Title = "Roman Tools",
+    Title = "tiberius.dev",
     Icon = "sword",
-    Author = "AspectTiber",
+    Author = "Tiberian Development",
     Size = UDim2.fromOffset(420, 550),
 })
 
