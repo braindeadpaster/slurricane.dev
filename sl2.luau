@@ -3,10 +3,10 @@ local cloneref = (cloneref or clonereference or function(instance) return instan
 local LP = game:GetService("Players").LocalPlayer
 
 local window = windUI:CreateWindow({
-    Title = "Tiberius.Dev",
+    Title = "tiberius.dev",
     Icon = "door-open", -- lucide icon
-    Author = "Built by the tiber family",
-    Folder = "Tiberius",
+    Author = "tiberian development",
+    Folder = "tiber",
     Size = UDim2.fromOffset(580, 460),
     MinSize = Vector2.new(560, 350),
     MaxSize = Vector2.new(850, 560),
