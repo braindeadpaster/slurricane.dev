@@ -3,9 +3,9 @@ local cloneref = (cloneref or clonereference or function(instance) return instan
 local LP = game:GetService("Players").LocalPlayer
 
 local window = windUI:CreateWindow({
-    Title = "tiberius.dev",
+    Title = "latae.villam",
     Icon = "door-open", -- lucide icon
-    Author = "tiberian development",
+    Author = "cerebrum mortuus est emplastrum",
     Folder = "tiber",
     Size = UDim2.fromOffset(580, 460),
     MinSize = Vector2.new(560, 350),
@@ -20,7 +20,7 @@ local window = windUI:CreateWindow({
 })
 
 window:EditOpenButton({
-    Title = "open UI",
+    Title = "Open",
     Icon = "monitor",
     CornerRadius = UDim.new(0, 16),
     StrokeThickness = 2,
@@ -197,7 +197,7 @@ function autoIdeaFunc()
 end
 local autoIdeaThread = nil
 mainSection:Toggle({
-    Title = "auto idea",
+    Title = "Auto Idea",
     Flag = "autoIdeaButtonElement",
     Callback = function(state)
         if autoIdeaThread == nil and state then
