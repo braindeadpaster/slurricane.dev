@@ -1,10 +1,34 @@
 local windUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
-local cloneref = (cloneref or clonereference or function(instance) return instance end)
-local LP = game:GetService("Players").LocalPlayer
+
+-- Services
+local Players = game:GetService("Players")
+local RunService = game:GetService("RunService")
+local UserInputService = game:GetService("UserInputService")
+local Camera = workspace.CurrentCamera
+local LocalPlayer = Players.LocalPlayer
+
+-- ESP Settings
+local espSettings = {
+    Color = Color3.fromRGB(0, 255, 0),
+    Size = 15,
+    AutoScale = true
+}
+
+-- Configuration
+local Configuration = {
+    ShowESP = false,
+    AutoIdea = false,
+    AutoSpillCleaner = false,
+    AutoBankLog = false,
+}
+
+-- ============================
+-- WINDUI
+-- ============================
 
 local window = windUI:CreateWindow({
     Title = "latae.villam",
-    Icon = "door-open", -- lucide icon
+    Icon = "door-open",
     Author = "cerebrum mortuus est emplastrum",
     Folder = "tiber",
     Size = UDim2.fromOffset(580, 460),
@@ -24,170 +48,332 @@ window:EditOpenButton({
     Icon = "monitor",
     CornerRadius = UDim.new(0, 16),
     StrokeThickness = 2,
-    Color = ColorSequence.new( -- gradient
-    Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+    Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
     OnlyMobile = false,
     Enabled = true,
     Draggable = true,
     Position = UDim2.new(0.1, 0, 0.6, 0)
 })
 
+-- Tabs
+local visualsTab = window:Tab({Title = "Visuals", Icon = "lucide:eye"})
+local farmingTab = window:Tab({Title = "Farming", Icon = "lucide:cpu"})
 
-local mainTab = window:Tab({Title = "main", Icon = "lucide:cpu"})
-mainTab:Select()
-
-local mainSection = mainTab:Section({
-    Title = "main",
+-- Sections
+local visualsSection = visualsTab:Section({
+    Title = "visuals",
     Box = true,
     TextTransparency = 0.05,
     TextXAlignment = "Left",
-    TextSize = 17, -- Default Size
+    TextSize = 17,
     Opened = true
 })
 
-local settings = {
-    unload = false,
-    autoIdea = false,
-    smartTweenY = 10,
-    tweenSpeedX = 10,
-    tweenSpeedY = 10
-}
+local farmingSection = farmingTab:Section({
+    Title = "farming",
+    Box = true,
+    TextTransparency = 0.05,
+    TextXAlignment = "Left",
+    TextSize = 17,
+    Opened = true
+})
 
-window:OnDestroy(function() settings.unload = true end)
+-- ============================
+-- ESP
+-- ============================
 
-local utils = {
-    tween,
-    noclipState = false,
-    noclipConnection,
-    floatConnection,
-    breakVelocity = function(self)
-        local velocity = Vector3.new(0, 0, 0)
-        for i, v in pairs(LP.Character:GetDescendants()) do
-            if v:IsA("BasePart") then
-                v.Velocity, v.RotVelocity = velocity, velocity
-            end
+local Drawing = Drawing or game:GetService("Drawing")
+local ESPList = {}
+
+local function NewText(color, size, transparency)
+    local text = Drawing.new("Text")
+    text.Visible = false
+    text.Text = ""
+    text.Position = Vector2.new(0, 0)
+    text.Color = color
+    text.Size = size
+    text.Center = true
+    text.Transparency = transparency
+    text.Outline = true
+    text.OutlineColor = Color3.fromRGB(0, 0, 0)
+    return text
+end
+
+local function NewBox()
+    local box = Drawing.new("Square")
+    box.Visible = false
+    box.Color = espSettings.Color
+    box.Thickness = 1.5
+    box.Transparency = 0.6
+    box.Filled = false
+    return box
+end
+
+local function NewHealthBar()
+    local health = Drawing.new("Line")
+    health.Visible = false
+    health.Color = Color3.fromRGB(0, 255, 0)
+    health.Thickness = 3
+    health.Transparency = 0.8
+    return health
+end
+
+local function CreateESP(player)
+    if not Configuration.ShowESP then return end
+    if player == LocalPlayer then return end
+    
+    local esp = {
+        NameTag = NewText(espSettings.Color, espSettings.Size, 0.5),
+        Box = NewBox(),
+        HealthBar = NewHealthBar(),
+        DistanceTag = NewText(Color3.fromRGB(255, 255, 255), 12, 0.4),
+        Player = player
+    }
+    
+    table.insert(ESPList, esp)
+    
+    local connection
+    connection = RunService.RenderStepped:Connect(function()
+        if not Configuration.ShowESP then 
+            esp.NameTag.Visible = false
+            esp.Box.Visible = false
+            esp.HealthBar.Visible = false
+            esp.DistanceTag.Visible = false
+            return 
         end
-    end,
-    noclip = function(self)
-        self.noclipState = true
-        wait(0.1)
-        local function noclipLoop()
-            if self.noclipState and LP.Character ~= nil then
-                for i, v in pairs(LP.Character:GetDescendants()) do
-                    if v:IsA("BasePart") and v.CanCollide == true then
-                        v.CanCollide = false
-                    end
+        
+        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or 
+           not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then
+            esp.NameTag.Visible = false
+            esp.Box.Visible = false
+            esp.HealthBar.Visible = false
+            esp.DistanceTag.Visible = false
+            return
+        end
+        
+        local rootPart = player.Character.HumanoidRootPart
+        local head = player.Character:FindFirstChild("Head") or rootPart
+        local humanoid = player.Character.Humanoid
+        
+        local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
+        local feetPos = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
+        
+        if headPos.Z > 0 then
+            local distance = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and 
+                           math.floor((LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude) or 0
+            
+            local scale = espSettings.AutoScale and (200 / math.max(distance, 20)) or 1
+            local boxWidth = 60 * scale
+            local boxHeight = (feetPos.Y - headPos.Y) * 1.2
+            
+            esp.Box.Visible = true
+            esp.Box.Size = Vector2.new(boxWidth, boxHeight)
+            esp.Box.Position = Vector2.new(headPos.X - boxWidth/2, headPos.Y)
+            
+            local healthPercent = humanoid.Health / humanoid.MaxHealth
+            esp.HealthBar.Visible = true
+            local healthBarHeight = boxHeight * healthPercent
+            esp.HealthBar.From = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight - healthBarHeight)
+            esp.HealthBar.To = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight)
+            
+            if healthPercent > 0.6 then
+                esp.HealthBar.Color = Color3.fromRGB(0, 255, 0)
+            elseif healthPercent > 0.3 then
+                esp.HealthBar.Color = Color3.fromRGB(255, 165, 0)
+            else
+                esp.HealthBar.Color = Color3.fromRGB(255, 0, 0)
+            end
+            
+            esp.NameTag.Visible = true
+            esp.NameTag.Text = player.Name
+            esp.NameTag.Position = Vector2.new(headPos.X, headPos.Y - 25)
+            
+            esp.DistanceTag.Visible = true
+            esp.DistanceTag.Text = string.format("%d studs", distance)
+            esp.DistanceTag.Position = Vector2.new(headPos.X, headPos.Y + boxHeight + 10)
+            
+            if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+                esp.Box.Color = Color3.fromRGB(0, 255, 255)
+                esp.NameTag.Color = Color3.fromRGB(0, 255, 255)
+            else
+                esp.Box.Color = espSettings.Color
+                esp.NameTag.Color = espSettings.Color
+            end
+        else
+            esp.NameTag.Visible = false
+            esp.Box.Visible = false
+            esp.HealthBar.Visible = false
+            esp.DistanceTag.Visible = false
+        end
+    end)
+    
+    esp.Connection = connection
+end
+
+local function RemoveAllESP()
+    for _, esp in pairs(ESPList) do
+        if esp.NameTag then esp.NameTag:Remove() end
+        if esp.Box then esp.Box:Remove() end
+        if esp.HealthBar then esp.HealthBar:Remove() end
+        if esp.DistanceTag then esp.DistanceTag:Remove() end
+        if esp.Connection then esp.Connection:Disconnect() end
+    end
+    ESPList = {}
+end
+
+local function EnableESP()
+    RemoveAllESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        CreateESP(player)
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if Configuration.ShowESP then
+        CreateESP(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    for i, esp in pairs(ESPList) do
+        if esp.Player == player then
+            if esp.NameTag then esp.NameTag:Remove() end
+            if esp.Box then esp.Box:Remove() end
+            if esp.HealthBar then esp.HealthBar:Remove() end
+            if esp.DistanceTag then esp.DistanceTag:Remove() end
+            if esp.Connection then esp.Connection:Disconnect() end
+            table.remove(ESPList, i)
+        end
+    end
+end)
+
+-- ============================
+-- AUTO FARMING
+-- ============================
+
+-- Auto Bank Log
+local bankLogRunning = false
+local bankLogThread = nil
+
+local function bankLogFarm()
+    while bankLogRunning and Configuration.AutoBankLog do
+        pcall(function()
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local packDealer = replicatedStorage:FindFirstChild("PackDealer")
+            if packDealer then
+                packDealer:FireServer("Banklog")
+            end
+        end)
+        task.wait(0.5)
+        pcall(function()
+            local replicatedStorage = game:GetService("ReplicatedStorage")
+            local ui = replicatedStorage:FindFirstChild("UI")
+            if ui then
+                local swipeLog = ui:FindFirstChild("SwipeLog")
+                if swipeLog then
+                    swipeLog:FireServer()
                 end
             end
-        end
-        self.noclipConnection = game:GetService("RunService").Stepped:Connect(noclipLoop)
-    end,
-    clip = function(self)
-        self.noclipState = false
-        if self.noclipConnection then self.noclipConnection:Disconnect() end
-    end,
-    float = function(self)
-        if self.floatConnection then
-            if self.floatConnection.Connected then return end
-        end
-        local floatPart = Instance.new('Part')
-        floatPart.Name = "floatPart"
-        floatPart.Parent = LP.Character
-        floatPart.Transparency = 1
-        floatPart.Size = Vector3.new(2, 0.2, 1.5)
-        floatPart.Anchored = true
-        local floatValue = -4
-        floatPart.CFrame = LP.Character.HumanoidRootPart.CFrame * CFrame.new(0, floatValue, 0)
-        self.floatConnection = RS.Stepped:Connect(function()
-            if floatPart and floatPart.Parent and LP.Character and
-                LP.Character:FindFirstChild("HumanoidRootPart") then
-                floatPart.CFrame = LP.Character.HumanoidRootPart.CFrame * CFrame.new(0, floatValue, 0)
-            else
-                self.floatConnection:Disconnect()
-            end
         end)
-    end,
-    unfloat = function(self)
-        if self.floatConnection then self.floatConnection:Disconnect() end
-        if LP.Character:FindFirstChild("floatPart") then
-            LP.Character.floatPart:Destroy()
-        end
-    end,
-    tweenToPosition = function(self, position, speed)
-        local info = TweenInfo.new((LP.Character.HumanoidRootPart.Position - position).Magnitude / speed,
-                                   Enum.EasingStyle.Linear,
-                                   Enum.EasingDirection.Out, 0, false)
-        self.tween = TS:Create(LP.Character.HumanoidRootPart, info, {CFrame = CFrame.new(position.X, position.Y, position.Z)})
-        self.tween:Play()
-        self:float()
-        self:breakVelocity()
-
-        local diedConnection = LP.Character.Humanoid.Died:Connect(function()
-            if self.tween then
-                self.tween:Cancel()
-            end
-        end)
-
-        self.tween.Completed:Wait()
-        diedConnection:Disconnect()
-        self:breakVelocity()
-        self:unfloat()
-        print(LP.Character.Humanoid:GetState(), self.tween.PlaybackState)
-        if self.tween.PlaybackState ~= Enum.PlaybackState.Completed then
-            return false
-        else
-            return true
-        end
-    end,
-    tweenSmart = function(self, position)
-        if not self:tweenToPosition(Vector3.new(LP.Character.HumanoidRootPart.Position.X, settings.smartTweenY, LP.Character.HumanoidRootPart.Position.Z), settings.tweenSpeedY) then
-            return false
-        end
-        if not self:tweenToPosition(Vector3.new(position.X, settings.smartTweenY, position.Z), settings.tweenSpeedX) then
-            return false
-        end
-        if not self:tweenToPosition(position, settings.tweenSpeedY) then
-            return false
-        end
-        return true
+        task.wait(0.5)
     end
-}
+end
 
+local function startBankLogFarm()
+    if bankLogRunning then return end
+    bankLogRunning = true
+    bankLogThread = task.spawn(bankLogFarm)
+end
 
+local function stopBankLogFarm()
+    bankLogRunning = false
+    if bankLogThread then coroutine.close(bankLogThread) bankLogThread = nil end
+end
 
-function autoIdeaFunc()
-    game:GetService("ReplicatedStorage"):WaitForChild("UI"):WaitForChild("DeliveryJob"):FireServer("StartJob")
+-- Auto Spill Cleaner
+local spillCleanerRunning = false
+local spillCleanerThread = nil
+
+local function cleanAllSpills()
+    local spillSystem = workspace:FindFirstChild("SpillSystem")
+    if not spillSystem then return end
+    
+    for _, child in ipairs(spillSystem:GetChildren()) do
+        if not spillCleanerRunning then break end
+        if child:IsA("BasePart") then
+            local spillPrompt = child:FindFirstChild("Spill")
+            if spillPrompt and spillPrompt:IsA("ProximityPrompt") then
+                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
+                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(child.Position)
+                end
+                fireproximityprompt(spillPrompt)
+                task.wait(3)
+            end
+        end
+    end
+end
+
+local function startSpillCleaner()
+    spillCleanerRunning = true
+    while spillCleanerRunning and Configuration.AutoSpillCleaner do
+        cleanAllSpills()
+        task.wait(5)
+    end
+end
+
+local function stopSpillCleaner()
+    spillCleanerRunning = false
+    if spillCleanerThread then coroutine.close(spillCleanerThread) spillCleanerThread = nil end
+end
+
+-- Auto Idea
+local autoIdeaThread = nil
+
+local function AutoIdeaFunc()
+    pcall(function()
+        local replicatedStorage = game:GetService("ReplicatedStorage")
+        local ui = replicatedStorage:FindFirstChild("UI")
+        if ui then
+            local deliveryJob = ui:FindFirstChild("DeliveryJob")
+            if deliveryJob then
+                deliveryJob:FireServer("StartJob")
+            end
+        end
+    end)
+    
     wait(20)
-    while not settings.unload and settings.autoIdea do
+    
+    while Configuration.AutoIdea do
         local spot = nil
-        for i, v in pairs(workspace.TrackingBlocks:GetChildren()) do
-            if v and v.Name == "IdeaTracking" then
-                for a, b in pairs(workspace.DeliveryJob:GetChildren()) do
-                    if b and string.find(b.Name, "Dest") then
-                        -- print(v.CFrame.Position)
-                        if (v.CFrame.Position - b.CFrame.Position).Magnitude < 50 then
-                            --print("spot is " .. b.Name)
-                            spot = b.CFrame.Position
+        local trackingBlocks = workspace:FindFirstChild("TrackingBlocks")
+        local deliveryJobFolder = workspace:FindFirstChild("DeliveryJob")
+        
+        if trackingBlocks and deliveryJobFolder then
+            for _, v in pairs(trackingBlocks:GetChildren()) do
+                if v and v.Name == "IdeaTracking" then
+                    for _, b in pairs(deliveryJobFolder:GetChildren()) do
+                        if b and string.find(b.Name, "Dest") then
+                            if (v.CFrame.Position - b.CFrame.Position).Magnitude < 50 then
+                                spot = b.CFrame.Position
+                            end
                         end
                     end
                 end
             end
         end
-        if not spot then
-            wait(20)
-            continue
-        end
-        for i, v in pairs(workspace.Cars:GetChildren()) do
-            if v.Owner.Value == game:GetService("Players").LocalPlayer.Name then
-                for a, b in v:GetDescendants() do
-                    --print(b.ClassName)
-                    if b.ClassName == "Model" then
-                        -- b.Anchored = true
-                        b.WorldPivot = CFrame.new(spot)
-                    elseif b.ClassName == "MeshPart" or b.ClassName == "Part" or
-                        b.ClassName == "DriveSeat" then
-                        -- b.Anchored = true
-                        b.CFrame = CFrame.new(spot)
+        
+        if spot then
+            local cars = workspace:FindFirstChild("Cars")
+            if cars then
+                for _, v in pairs(cars:GetChildren()) do
+                    if v:FindFirstChild("Owner") and v.Owner.Value == LocalPlayer.Name then
+                        for _, b in v:GetDescendants() do
+                            pcall(function() 
+                                if b:IsA("BasePart") then
+                                    b.CFrame = CFrame.new(spot)
+                                end
+                            end)
+                        end
                     end
                 end
             end
@@ -195,18 +381,65 @@ function autoIdeaFunc()
         wait(20)
     end
 end
-local autoIdeaThread = nil
-mainSection:Toggle({
+
+-- ============================
+-- UI ELEMENTS
+-- ============================
+
+-- Visuals Tab
+visualsSection:Toggle({
+    Title = "Toggle ESP",
+    Flag = "espElement",
+    Callback = function(state)
+        Configuration.ShowESP = state
+        if state then
+            EnableESP()
+        else
+            RemoveAllESP()
+        end
+    end
+})
+
+-- Farming Tab (all farming options in one section)
+farmingSection:Toggle({
     Title = "Auto Idea",
     Flag = "autoIdeaButtonElement",
     Callback = function(state)
-        if autoIdeaThread == nil and state then
-            autoIdeaThread = task.spawn(autoIdeaFunc)
-        elseif autoIdeaThread and state then
-            if coroutine.status(autoIdeaThread) == "dead" then
-                autoIdeaThread = task.spawn(autoIdeaFunc)
+        Configuration.AutoIdea = state
+        if state then
+            if autoIdeaThread == nil or coroutine.status(autoIdeaThread) == "dead" then
+                autoIdeaThread = task.spawn(AutoIdeaFunc)
             end
         end
-        settings.autoIdea = state
     end
 })
+
+farmingSection:Toggle({
+    Title = "Auto Spill Cleaner",
+    Flag = "autoSpillCleanerElement",
+    Callback = function(state)
+        Configuration.AutoSpillCleaner = state
+        if state then
+            if spillCleanerThread == nil or coroutine.status(spillCleanerThread) == "dead" then
+                spillCleanerThread = task.spawn(startSpillCleaner)
+            end
+        else
+            stopSpillCleaner()
+        end
+    end
+})
+
+farmingSection:Toggle({
+    Title = "Auto Bank Log Farm",
+    Flag = "autoBankLogElement",
+    Callback = function(state)
+        Configuration.AutoBankLog = state
+        if state then
+            startBankLogFarm()
+        else
+            stopBankLogFarm()
+        end
+    end
+})
+
+print("Loaded - ESP + Farming (Auto Idea, Spill Cleaner, Bank Log)")
