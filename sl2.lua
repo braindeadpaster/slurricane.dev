@@ -1,36 +1,41 @@
 local windUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local cloneref = (cloneref or clonereference or function(instance) return instance end)
 
 -- Services
+local HttpService = game:GetService("HttpService")
 local Players = game:GetService("Players")
-local RunService = game:GetService("RunService")
 local UserInputService = game:GetService("UserInputService")
+local RunService = game:GetService("RunService")
+local TweenService = game:GetService("TweenService")
+local LP = Players.LocalPlayer
+local Mouse = LP:GetMouse()
 local Camera = workspace.CurrentCamera
-local LocalPlayer = Players.LocalPlayer
 
 -- ESP Settings
 local espSettings = {
     Color = Color3.fromRGB(0, 255, 0),
     Size = 15,
+    Transparency = 1,
     AutoScale = true
 }
 
 -- Configuration
 local Configuration = {
+    -- Visuals
     ShowESP = false,
+    
+    -- Farming
     AutoIdea = false,
     AutoSpillCleaner = false,
     AutoBankLog = false,
 }
 
--- ============================
--- WINDUI
--- ============================
-
+-- Window setup
 local window = windUI:CreateWindow({
-    Title = "latae.villam",
+    Title = "sweetdreams.og",
     Icon = "door-open",
     Author = "cerebrum mortuus est emplastrum",
-    Folder = "tiber",
+    Folder = "sweetdreams",
     Size = UDim2.fromOffset(580, 460),
     MinSize = Vector2.new(560, 350),
     MaxSize = Vector2.new(850, 560),
@@ -48,7 +53,8 @@ window:EditOpenButton({
     Icon = "monitor",
     CornerRadius = UDim.new(0, 16),
     StrokeThickness = 2,
-    Color = ColorSequence.new(Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+    Color = ColorSequence.new(
+    Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
     OnlyMobile = false,
     Enabled = true,
     Draggable = true,
@@ -58,6 +64,8 @@ window:EditOpenButton({
 -- Tabs
 local visualsTab = window:Tab({Title = "Visuals", Icon = "lucide:eye"})
 local farmingTab = window:Tab({Title = "Farming", Icon = "lucide:cpu"})
+
+visualsTab:Select()
 
 -- Sections
 local visualsSection = visualsTab:Section({
@@ -78,12 +86,74 @@ local farmingSection = farmingTab:Section({
     Opened = true
 })
 
+local autoFarmSection = farmingTab:Section({
+    Title = "auto farm",
+    Box = true,
+    TextTransparency = 0.05,
+    TextXAlignment = "Left",
+    TextSize = 17,
+    Opened = true
+})
+
 -- ============================
--- ESP
+-- AUTO BANK LOG FARM
+-- ============================
+
+local bankLogThread = nil
+local bankLogRunning = false
+
+local function bankLogFarm()
+    while bankLogRunning and Configuration.AutoBankLog do
+        -- First event: Banklog
+        local success, err = pcall(function()
+            local Event = game:GetService("ReplicatedStorage").PackDealer
+            Event:FireServer("Banklog")
+        end)
+        
+        if not success then
+            warn("Banklog failed: ", err)
+        end
+        
+        -- Wait 0.5 seconds
+        task.wait(0.5)
+        
+        -- Second event: SwipeLog
+        success, err = pcall(function()
+            local Event = game:GetService("ReplicatedStorage").UI.SwipeLog
+            Event:FireServer()
+        end)
+        
+        if not success then
+            warn("SwipeLog failed: ", err)
+        end
+        
+        -- Wait before next cycle (adjustable)
+        task.wait(0.5)
+    end
+end
+
+local function startBankLogFarm()
+    if bankLogRunning then return end
+    bankLogRunning = true
+    bankLogThread = task.spawn(bankLogFarm)
+    print("Auto Bank Log farm started")
+end
+
+local function stopBankLogFarm()
+    bankLogRunning = false
+    if bankLogThread then
+        coroutine.close(bankLogThread)
+        bankLogThread = nil
+    end
+    print("Auto Bank Log farm stopped")
+end
+
+-- ============================
+-- PROFESSIONAL ESP (Drawing Library)
 -- ============================
 
 local Drawing = Drawing or game:GetService("Drawing")
-local ESPList = {}
+local ESPObjects = {}
 
 local function NewText(color, size, transparency)
     local text = Drawing.new("Text")
@@ -118,9 +188,11 @@ local function NewHealthBar()
     return health
 end
 
+local ESPList = {}
+
 local function CreateESP(player)
     if not Configuration.ShowESP then return end
-    if player == LocalPlayer then return end
+    if player == LP then return end
     
     local esp = {
         NameTag = NewText(espSettings.Color, espSettings.Size, 0.5),
@@ -132,6 +204,7 @@ local function CreateESP(player)
     
     table.insert(ESPList, esp)
     
+    -- Update loop for this player
     local connection
     connection = RunService.RenderStepped:Connect(function()
         if not Configuration.ShowESP then 
@@ -155,27 +228,33 @@ local function CreateESP(player)
         local head = player.Character:FindFirstChild("Head") or rootPart
         local humanoid = player.Character.Humanoid
         
+        local rootPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
         local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
         local feetPos = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
         
-        if headPos.Z > 0 then
-            local distance = LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") and 
-                           math.floor((LocalPlayer.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude) or 0
+        if onScreen then
+            -- Calculate distance
+            local distance = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and 
+                           math.floor((LP.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude) or 0
             
+            -- Scale size based on distance
             local scale = espSettings.AutoScale and (200 / math.max(distance, 20)) or 1
             local boxWidth = 60 * scale
             local boxHeight = (feetPos.Y - headPos.Y) * 1.2
             
+            -- Update Box ESP
             esp.Box.Visible = true
             esp.Box.Size = Vector2.new(boxWidth, boxHeight)
             esp.Box.Position = Vector2.new(headPos.X - boxWidth/2, headPos.Y)
             
+            -- Update Health Bar
             local healthPercent = humanoid.Health / humanoid.MaxHealth
             esp.HealthBar.Visible = true
             local healthBarHeight = boxHeight * healthPercent
             esp.HealthBar.From = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight - healthBarHeight)
             esp.HealthBar.To = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight)
             
+            -- Health bar color
             if healthPercent > 0.6 then
                 esp.HealthBar.Color = Color3.fromRGB(0, 255, 0)
             elseif healthPercent > 0.3 then
@@ -184,15 +263,18 @@ local function CreateESP(player)
                 esp.HealthBar.Color = Color3.fromRGB(255, 0, 0)
             end
             
+            -- Update Name Tag
             esp.NameTag.Visible = true
             esp.NameTag.Text = player.Name
             esp.NameTag.Position = Vector2.new(headPos.X, headPos.Y - 25)
             
+            -- Update Distance Tag
             esp.DistanceTag.Visible = true
             esp.DistanceTag.Text = string.format("%d studs", distance)
             esp.DistanceTag.Position = Vector2.new(headPos.X, headPos.Y + boxHeight + 10)
             
-            if player.Team and LocalPlayer.Team and player.Team == LocalPlayer.Team then
+            -- Team color check
+            if player.Team and LP.Team and player.Team == LP.Team then
                 esp.Box.Color = Color3.fromRGB(0, 255, 255)
                 esp.NameTag.Color = Color3.fromRGB(0, 255, 255)
             else
@@ -207,6 +289,7 @@ local function CreateESP(player)
         end
     end)
     
+    -- Store connection for cleanup
     esp.Connection = connection
 end
 
@@ -248,66 +331,55 @@ Players.PlayerRemoving:Connect(function(player)
 end)
 
 -- ============================
--- AUTO FARMING
+-- SPORTS SHOP SPILL CLEANER
 -- ============================
 
--- Auto Bank Log
-local bankLogRunning = false
-local bankLogThread = nil
+local spillCleanerThread = nil
+local spillCleanerRunning = false
 
-local function bankLogFarm()
-    while bankLogRunning and Configuration.AutoBankLog do
-        pcall(function()
-            local replicatedStorage = game:GetService("ReplicatedStorage")
-            local packDealer = replicatedStorage:FindFirstChild("PackDealer")
-            if packDealer then
-                packDealer:FireServer("Banklog")
-            end
-        end)
-        task.wait(0.5)
-        pcall(function()
-            local replicatedStorage = game:GetService("ReplicatedStorage")
-            local ui = replicatedStorage:FindFirstChild("UI")
-            if ui then
-                local swipeLog = ui:FindFirstChild("SwipeLog")
-                if swipeLog then
-                    swipeLog:FireServer()
-                end
-            end
-        end)
-        task.wait(0.5)
+local function getCharacter()
+    local character = LP.Character
+    if not character or not character.Parent then
+        LP.CharacterAdded:Wait()
+        character = LP.Character
+    end
+    return character
+end
+
+local function teleportTo(position)
+    local character = getCharacter()
+    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
+    if humanoidRootPart then
+        humanoidRootPart.CFrame = CFrame.new(position)
+        task.wait(0.3)
     end
 end
 
-local function startBankLogFarm()
-    if bankLogRunning then return end
-    bankLogRunning = true
-    bankLogThread = task.spawn(bankLogFarm)
-end
-
-local function stopBankLogFarm()
-    bankLogRunning = false
-    if bankLogThread then coroutine.close(bankLogThread) bankLogThread = nil end
-end
-
--- Auto Spill Cleaner
-local spillCleanerRunning = false
-local spillCleanerThread = nil
-
 local function cleanAllSpills()
+    -- Find the SpillSystem folder
     local spillSystem = workspace:FindFirstChild("SpillSystem")
-    if not spillSystem then return end
+    if not spillSystem then
+        return
+    end
     
+    -- Loop through all children in SpillSystem
     for _, child in ipairs(spillSystem:GetChildren()) do
         if not spillCleanerRunning then break end
+        
+        -- Check if it's a part (spill)
         if child:IsA("BasePart") then
+            -- Look for a ProximityPrompt named "Spill"
             local spillPrompt = child:FindFirstChild("Spill")
             if spillPrompt and spillPrompt:IsA("ProximityPrompt") then
-                if LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
-                    LocalPlayer.Character.HumanoidRootPart.CFrame = CFrame.new(child.Position)
-                end
+                -- Teleport to the spill
+                teleportTo(child.Position)
+                
+                -- Trigger the proximity prompt
                 fireproximityprompt(spillPrompt)
+                
+                -- Wait for cleaning to complete
                 task.wait(3)
+                task.wait(1)
             end
         end
     end
@@ -315,31 +387,33 @@ end
 
 local function startSpillCleaner()
     spillCleanerRunning = true
+    
     while spillCleanerRunning and Configuration.AutoSpillCleaner do
         cleanAllSpills()
-        task.wait(5)
+        task.wait(5) -- Check for new spills every 5 seconds
     end
 end
 
 local function stopSpillCleaner()
     spillCleanerRunning = false
-    if spillCleanerThread then coroutine.close(spillCleanerThread) spillCleanerThread = nil end
+    if spillCleanerThread then
+        coroutine.close(spillCleanerThread)
+        spillCleanerThread = nil
+    end
 end
 
--- Auto Idea
-local autoIdeaThread = nil
+-- ============================
+-- AUTO IDEA (Farming)
+-- ============================
 
 local function AutoIdeaFunc()
-    pcall(function()
-        local replicatedStorage = game:GetService("ReplicatedStorage")
-        local ui = replicatedStorage:FindFirstChild("UI")
-        if ui then
-            local deliveryJob = ui:FindFirstChild("DeliveryJob")
-            if deliveryJob then
-                deliveryJob:FireServer("StartJob")
-            end
-        end
-    end)
+    local replicatedStorage = game:GetService("ReplicatedStorage")
+    local deliveryJob = replicatedStorage:FindFirstChild("UI") and 
+                       replicatedStorage.UI:FindFirstChild("DeliveryJob")
+    
+    if deliveryJob then
+        pcall(function() deliveryJob:FireServer("StartJob") end)
+    end
     
     wait(20)
     
@@ -366,13 +440,13 @@ local function AutoIdeaFunc()
             local cars = workspace:FindFirstChild("Cars")
             if cars then
                 for _, v in pairs(cars:GetChildren()) do
-                    if v:FindFirstChild("Owner") and v.Owner.Value == LocalPlayer.Name then
+                    if v:FindFirstChild("Owner") and v.Owner.Value == LP.Name then
                         for _, b in v:GetDescendants() do
-                            pcall(function() 
-                                if b:IsA("BasePart") then
-                                    b.CFrame = CFrame.new(spot)
-                                end
-                            end)
+                            if b.ClassName == "Model" then
+                                pcall(function() b:SetPrimaryPartCFrame(CFrame.new(spot)) end)
+                            elseif b:IsA("BasePart") and b.Name ~= "HumanoidRootPart" then
+                                pcall(function() b.CFrame = CFrame.new(spot) end)
+                            end
                         end
                     end
                 end
@@ -381,6 +455,8 @@ local function AutoIdeaFunc()
         wait(20)
     end
 end
+
+local autoIdeaThread = nil
 
 -- ============================
 -- UI ELEMENTS
@@ -400,7 +476,22 @@ visualsSection:Toggle({
     end
 })
 
--- Farming Tab (all farming options in one section)
+-- Auto Farm Section
+autoFarmSection:Toggle({
+    Title = "Auto Bank Log Farm",
+    Description = "Automatically farms Banklog and SwipeLog",
+    Flag = "autoBankLogElement",
+    Callback = function(state)
+        Configuration.AutoBankLog = state
+        if state then
+            startBankLogFarm()
+        else
+            stopBankLogFarm()
+        end
+    end
+})
+
+-- Farming Tab
 farmingSection:Toggle({
     Title = "Auto Idea",
     Flag = "autoIdeaButtonElement",
@@ -429,17 +520,4 @@ farmingSection:Toggle({
     end
 })
 
-farmingSection:Toggle({
-    Title = "Auto Bank Log Farm",
-    Flag = "autoBankLogElement",
-    Callback = function(state)
-        Configuration.AutoBankLog = state
-        if state then
-            startBankLogFarm()
-        else
-            stopBankLogFarm()
-        end
-    end
-})
-
-print("Loaded - ESP + Farming (Auto Idea, Spill Cleaner, Bank Log)")
+print("sweetdreams.og loaded - Farming & ESP only")
