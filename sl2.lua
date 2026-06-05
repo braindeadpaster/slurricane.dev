@@ -11,14 +11,6 @@ local LP = Players.LocalPlayer
 local Mouse = LP:GetMouse()
 local Camera = workspace.CurrentCamera
 
--- ESP Settings
-local espSettings = {
-    Color = Color3.fromRGB(0, 255, 0),
-    Size = 15,
-    Transparency = 1,
-    AutoScale = true
-}
-
 -- Configuration
 local Configuration = {
     -- Visuals
@@ -96,6 +88,76 @@ local autoFarmSection = farmingTab:Section({
 })
 
 -- ============================
+-- HIGHLIGHT ESP
+-- ============================
+
+local function applyHighlight(character)
+    local highlight = Instance.new("Highlight")
+    highlight.Name = "DebugHighlight"
+    highlight.FillTransparency = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent = character
+end
+
+local function removeHighlight(character)
+    local highlight = character:FindFirstChild("DebugHighlight")
+    if highlight then
+        highlight:Destroy()
+    end
+end
+
+local playerConnections = {}
+
+local function onPlayer(player)
+    if player == LP then return end
+
+    if player.Character then
+        if Configuration.ShowESP then
+            applyHighlight(player.Character)
+        end
+    end
+
+    playerConnections[player] = player.CharacterAdded:Connect(function(character)
+        if Configuration.ShowESP then
+            applyHighlight(character)
+        end
+    end)
+end
+
+local function enableESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        onPlayer(player)
+    end
+end
+
+local function disableESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        if player.Character then
+            removeHighlight(player.Character)
+        end
+        if playerConnections[player] then
+            playerConnections[player]:Disconnect()
+            playerConnections[player] = nil
+        end
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if Configuration.ShowESP then
+        onPlayer(player)
+    end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    if playerConnections[player] then
+        playerConnections[player]:Disconnect()
+        playerConnections[player] = nil
+    end
+end)
+
+-- ============================
 -- AUTO BANK LOG FARM
 -- ============================
 
@@ -104,30 +166,20 @@ local bankLogRunning = false
 
 local function bankLogFarm()
     while bankLogRunning and Configuration.AutoBankLog do
-        -- First event: Banklog
         local success, err = pcall(function()
             local Event = game:GetService("ReplicatedStorage").PackDealer
             Event:FireServer("Banklog")
         end)
-        
-        if not success then
-            warn("Banklog failed: ", err)
-        end
-        
-        -- Wait 0.5 seconds
+        if not success then warn("Banklog failed: ", err) end
+
         task.wait(0.5)
-        
-        -- Second event: SwipeLog
+
         success, err = pcall(function()
             local Event = game:GetService("ReplicatedStorage").UI.SwipeLog
             Event:FireServer()
         end)
-        
-        if not success then
-            warn("SwipeLog failed: ", err)
-        end
-        
-        -- Wait before next cycle (adjustable)
+        if not success then warn("SwipeLog failed: ", err) end
+
         task.wait(0.5)
     end
 end
@@ -147,188 +199,6 @@ local function stopBankLogFarm()
     end
     print("Auto Bank Log farm stopped")
 end
-
--- ============================
--- PROFESSIONAL ESP (Drawing Library)
--- ============================
-
-local Drawing = Drawing or game:GetService("Drawing")
-local ESPObjects = {}
-
-local function NewText(color, size, transparency)
-    local text = Drawing.new("Text")
-    text.Visible = false
-    text.Text = ""
-    text.Position = Vector2.new(0, 0)
-    text.Color = color
-    text.Size = size
-    text.Center = true
-    text.Transparency = transparency
-    text.Outline = true
-    text.OutlineColor = Color3.fromRGB(0, 0, 0)
-    return text
-end
-
-local function NewBox()
-    local box = Drawing.new("Square")
-    box.Visible = false
-    box.Color = espSettings.Color
-    box.Thickness = 1.5
-    box.Transparency = 0.6
-    box.Filled = false
-    return box
-end
-
-local function NewHealthBar()
-    local health = Drawing.new("Line")
-    health.Visible = false
-    health.Color = Color3.fromRGB(0, 255, 0)
-    health.Thickness = 3
-    health.Transparency = 0.8
-    return health
-end
-
-local ESPList = {}
-
-local function CreateESP(player)
-    if not Configuration.ShowESP then return end
-    if player == LP then return end
-    
-    local esp = {
-        NameTag = NewText(espSettings.Color, espSettings.Size, 0.5),
-        Box = NewBox(),
-        HealthBar = NewHealthBar(),
-        DistanceTag = NewText(Color3.fromRGB(255, 255, 255), 12, 0.4),
-        Player = player
-    }
-    
-    table.insert(ESPList, esp)
-    
-    -- Update loop for this player
-    local connection
-    connection = RunService.RenderStepped:Connect(function()
-        if not Configuration.ShowESP then 
-            esp.NameTag.Visible = false
-            esp.Box.Visible = false
-            esp.HealthBar.Visible = false
-            esp.DistanceTag.Visible = false
-            return 
-        end
-        
-        if not player.Character or not player.Character:FindFirstChild("HumanoidRootPart") or 
-           not player.Character:FindFirstChild("Humanoid") or player.Character.Humanoid.Health <= 0 then
-            esp.NameTag.Visible = false
-            esp.Box.Visible = false
-            esp.HealthBar.Visible = false
-            esp.DistanceTag.Visible = false
-            return
-        end
-        
-        local rootPart = player.Character.HumanoidRootPart
-        local head = player.Character:FindFirstChild("Head") or rootPart
-        local humanoid = player.Character.Humanoid
-        
-        local rootPos, onScreen = Camera:WorldToViewportPoint(rootPart.Position)
-        local headPos = Camera:WorldToViewportPoint(head.Position + Vector3.new(0, 1.5, 0))
-        local feetPos = Camera:WorldToViewportPoint(rootPart.Position - Vector3.new(0, 3, 0))
-        
-        if onScreen then
-            -- Calculate distance
-            local distance = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart") and 
-                           math.floor((LP.Character.HumanoidRootPart.Position - rootPart.Position).Magnitude) or 0
-            
-            -- Scale size based on distance
-            local scale = espSettings.AutoScale and (200 / math.max(distance, 20)) or 1
-            local boxWidth = 60 * scale
-            local boxHeight = (feetPos.Y - headPos.Y) * 1.2
-            
-            -- Update Box ESP
-            esp.Box.Visible = true
-            esp.Box.Size = Vector2.new(boxWidth, boxHeight)
-            esp.Box.Position = Vector2.new(headPos.X - boxWidth/2, headPos.Y)
-            
-            -- Update Health Bar
-            local healthPercent = humanoid.Health / humanoid.MaxHealth
-            esp.HealthBar.Visible = true
-            local healthBarHeight = boxHeight * healthPercent
-            esp.HealthBar.From = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight - healthBarHeight)
-            esp.HealthBar.To = Vector2.new(headPos.X - boxWidth/2 - 8, headPos.Y + boxHeight)
-            
-            -- Health bar color
-            if healthPercent > 0.6 then
-                esp.HealthBar.Color = Color3.fromRGB(0, 255, 0)
-            elseif healthPercent > 0.3 then
-                esp.HealthBar.Color = Color3.fromRGB(255, 165, 0)
-            else
-                esp.HealthBar.Color = Color3.fromRGB(255, 0, 0)
-            end
-            
-            -- Update Name Tag
-            esp.NameTag.Visible = true
-            esp.NameTag.Text = player.Name
-            esp.NameTag.Position = Vector2.new(headPos.X, headPos.Y - 25)
-            
-            -- Update Distance Tag
-            esp.DistanceTag.Visible = true
-            esp.DistanceTag.Text = string.format("%d studs", distance)
-            esp.DistanceTag.Position = Vector2.new(headPos.X, headPos.Y + boxHeight + 10)
-            
-            -- Team color check
-            if player.Team and LP.Team and player.Team == LP.Team then
-                esp.Box.Color = Color3.fromRGB(0, 255, 255)
-                esp.NameTag.Color = Color3.fromRGB(0, 255, 255)
-            else
-                esp.Box.Color = espSettings.Color
-                esp.NameTag.Color = espSettings.Color
-            end
-        else
-            esp.NameTag.Visible = false
-            esp.Box.Visible = false
-            esp.HealthBar.Visible = false
-            esp.DistanceTag.Visible = false
-        end
-    end)
-    
-    -- Store connection for cleanup
-    esp.Connection = connection
-end
-
-local function RemoveAllESP()
-    for _, esp in pairs(ESPList) do
-        if esp.NameTag then esp.NameTag:Remove() end
-        if esp.Box then esp.Box:Remove() end
-        if esp.HealthBar then esp.HealthBar:Remove() end
-        if esp.DistanceTag then esp.DistanceTag:Remove() end
-        if esp.Connection then esp.Connection:Disconnect() end
-    end
-    ESPList = {}
-end
-
-local function EnableESP()
-    RemoveAllESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        CreateESP(player)
-    end
-end
-
-Players.PlayerAdded:Connect(function(player)
-    if Configuration.ShowESP then
-        CreateESP(player)
-    end
-end)
-
-Players.PlayerRemoving:Connect(function(player)
-    for i, esp in pairs(ESPList) do
-        if esp.Player == player then
-            if esp.NameTag then esp.NameTag:Remove() end
-            if esp.Box then esp.Box:Remove() end
-            if esp.HealthBar then esp.HealthBar:Remove() end
-            if esp.DistanceTag then esp.DistanceTag:Remove() end
-            if esp.Connection then esp.Connection:Disconnect() end
-            table.remove(ESPList, i)
-        end
-    end
-end)
 
 -- ============================
 -- SPORTS SHOP SPILL CLEANER
@@ -356,28 +226,16 @@ local function teleportTo(position)
 end
 
 local function cleanAllSpills()
-    -- Find the SpillSystem folder
     local spillSystem = workspace:FindFirstChild("SpillSystem")
-    if not spillSystem then
-        return
-    end
-    
-    -- Loop through all children in SpillSystem
+    if not spillSystem then return end
+
     for _, child in ipairs(spillSystem:GetChildren()) do
         if not spillCleanerRunning then break end
-        
-        -- Check if it's a part (spill)
         if child:IsA("BasePart") then
-            -- Look for a ProximityPrompt named "Spill"
             local spillPrompt = child:FindFirstChild("Spill")
             if spillPrompt and spillPrompt:IsA("ProximityPrompt") then
-                -- Teleport to the spill
                 teleportTo(child.Position)
-                
-                -- Trigger the proximity prompt
                 fireproximityprompt(spillPrompt)
-                
-                -- Wait for cleaning to complete
                 task.wait(3)
                 task.wait(1)
             end
@@ -387,10 +245,9 @@ end
 
 local function startSpillCleaner()
     spillCleanerRunning = true
-    
     while spillCleanerRunning and Configuration.AutoSpillCleaner do
         cleanAllSpills()
-        task.wait(5) -- Check for new spills every 5 seconds
+        task.wait(5)
     end
 end
 
@@ -408,20 +265,20 @@ end
 
 local function AutoIdeaFunc()
     local replicatedStorage = game:GetService("ReplicatedStorage")
-    local deliveryJob = replicatedStorage:FindFirstChild("UI") and 
+    local deliveryJob = replicatedStorage:FindFirstChild("UI") and
                        replicatedStorage.UI:FindFirstChild("DeliveryJob")
-    
+
     if deliveryJob then
         pcall(function() deliveryJob:FireServer("StartJob") end)
     end
-    
+
     wait(20)
-    
+
     while Configuration.AutoIdea do
         local spot = nil
         local trackingBlocks = workspace:FindFirstChild("TrackingBlocks")
         local deliveryJobFolder = workspace:FindFirstChild("DeliveryJob")
-        
+
         if trackingBlocks and deliveryJobFolder then
             for _, v in pairs(trackingBlocks:GetChildren()) do
                 if v and v.Name == "IdeaTracking" then
@@ -435,7 +292,7 @@ local function AutoIdeaFunc()
                 end
             end
         end
-        
+
         if spot then
             local cars = workspace:FindFirstChild("Cars")
             if cars then
@@ -469,9 +326,9 @@ visualsSection:Toggle({
     Callback = function(state)
         Configuration.ShowESP = state
         if state then
-            EnableESP()
+            enableESP()
         else
-            RemoveAllESP()
+            disableESP()
         end
     end
 })
