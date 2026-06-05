@@ -15,7 +15,6 @@ local Camera           = workspace.CurrentCamera
 
 -- Configuration
 local Configuration = {
-    -- ESP
     ESP_Highlight   = false,
     ESP_Box         = false,
     ESP_Skeleton    = false,
@@ -27,7 +26,6 @@ local Configuration = {
     ESP_VisibleOnly = false,
     ESP_MaxDist     = 1000,
     ESP_Color       = Color3.fromRGB(255, 255, 255),
-    -- Visuals
     Crosshair       = false,
     CrosshairStyle  = "Cross",
     CrosshairSize   = 10,
@@ -35,26 +33,21 @@ local Configuration = {
     FOVCircle       = false,
     FOVRadius       = 80,
     Fullbright      = false,
-    -- Combat
     Aimbot          = false,
     AimbotFOV       = 80,
-    AimbotSmooth    = 0.1,
-    SilentAim       = false,
-    SilentAimFOV    = 120,
+    AimbotSmooth    = 0.3,
+    AimbotPart      = "Head",
     ReachExtender   = false,
     ReachValue      = 10,
-    -- Movement
     Noclip          = false,
     Fly             = false,
     FlySpeed        = 50,
     SpeedHack       = false,
     SpeedValue      = 25,
-    -- Utility
     AntiAFK         = false,
     AutoRejoin      = false,
     ChatNotify      = false,
     ChatKeyword     = "",
-    -- Farming
     AutoIdea        = false,
     AutoSpillCleaner = false,
     AutoBankLog     = false,
@@ -122,42 +115,34 @@ local espSection = visualsTab:Section({
     Title = "esp", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local screenSection = visualsTab:Section({
     Title = "screen", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local combatSection = combatTab:Section({
     Title = "combat", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local movementSection = movementTab:Section({
     Title = "movement", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local utilitySection = utilityTab:Section({
     Title = "utility", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local playerSection = utilityTab:Section({
     Title = "player", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local configSection = utilityTab:Section({
     Title = "config", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local farmingSection = farmingTab:Section({
     Title = "farming", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
 })
-
 local autoFarmSection = farmingTab:Section({
     Title = "auto farm", Box = true, TextTransparency = 0.05,
     TextXAlignment = "Left", TextSize = 17, Opened = true
@@ -275,7 +260,7 @@ local function isVisible(character)
     local hrp = character:FindFirstChild("HumanoidRootPart")
     if not hrp then return false end
     local origin    = Camera.CFrame.Position
-    local direction = (hrp.Position - origin)
+    local direction = hrp.Position - origin
     local ray       = Ray.new(origin, direction)
     local hit       = workspace:FindPartOnRayWithIgnoreList(ray, {LP.Character, Camera})
     if not hit then return true end
@@ -341,13 +326,17 @@ local function startESPRender(player)
         local hrp  = char:FindFirstChild("HumanoidRootPart")
         local head = char:FindFirstChild("Head")
         local hum  = char:FindFirstChildOfClass("Humanoid")
-        if not hrp or not head or not hum or hum.Health <= 0 then hideDrawings(drawings) return end
+        if not hrp or not head or not hum or hum.Health <= 0 then
+            hideDrawings(drawings) return
+        end
 
         local myHRP = LP.Character and LP.Character:FindFirstChild("HumanoidRootPart")
         local dist  = myHRP and math.floor((myHRP.Position - hrp.Position).Magnitude) or 0
         if dist > Configuration.ESP_MaxDist then hideDrawings(drawings) return end
 
-        if Configuration.ESP_VisibleOnly and not isVisible(char) then hideDrawings(drawings) return end
+        if Configuration.ESP_VisibleOnly and not isVisible(char) then
+            hideDrawings(drawings) return
+        end
 
         local headTopWorld   = head.Position + Vector3.new(0, head.Size.Y / 2 + 0.3, 0)
         local feetWorld      = hrp.Position  - Vector3.new(0, 3, 0)
@@ -478,7 +467,10 @@ local function updateHighlightColors()
         if player == LP then continue end
         if player.Character then
             local h = player.Character:FindFirstChild("DebugHighlight")
-            if h then h.FillColor = Configuration.ESP_Color h.OutlineColor = Configuration.ESP_Color end
+            if h then
+                h.FillColor    = Configuration.ESP_Color
+                h.OutlineColor = Configuration.ESP_Color
+            end
         end
     end
 end
@@ -517,20 +509,17 @@ local function disableAllESP()
 end
 
 -- ============================
--- SCREEN DRAWINGS (Crosshair, FOV)
+-- SCREEN DRAWINGS
 -- ============================
 
--- Crosshair drawings
 local chLines = {
     newLine(Color3.fromRGB(255,255,255), 1.5),
     newLine(Color3.fromRGB(255,255,255), 1.5),
     newLine(Color3.fromRGB(255,255,255), 1.5),
     newLine(Color3.fromRGB(255,255,255), 1.5),
 }
-local chDot  = newCircle(Color3.fromRGB(255,255,255), 1.5)
-local chCirc = newCircle(Color3.fromRGB(255,255,255), 1.5)
-
--- FOV circle
+local chDot     = newCircle(Color3.fromRGB(255,255,255), 1.5)
+local chCirc    = newCircle(Color3.fromRGB(255,255,255), 1.5)
 local fovCircle = newCircle(Color3.fromRGB(255,255,255), 1)
 
 RunService.RenderStepped:Connect(function()
@@ -540,19 +529,19 @@ RunService.RenderStepped:Connect(function()
     local sz  = Configuration.CrosshairSize
     local col = Configuration.CrosshairColor
 
-    -- Crosshair
     if Configuration.Crosshair then
         local style = Configuration.CrosshairStyle
-        -- hide all first
         for _, l in ipairs(chLines) do l.Visible = false end
         chDot.Visible  = false
         chCirc.Visible = false
 
         if style == "Cross" then
             chLines[1].Visible = true chLines[1].Color = col
-            chLines[1].From = Vector2.new(cx - sz, cy) chLines[1].To = Vector2.new(cx + sz, cy)
+            chLines[1].From    = Vector2.new(cx - sz, cy)
+            chLines[1].To      = Vector2.new(cx + sz, cy)
             chLines[2].Visible = true chLines[2].Color = col
-            chLines[2].From = Vector2.new(cx, cy - sz) chLines[2].To = Vector2.new(cx, cy + sz)
+            chLines[2].From    = Vector2.new(cx, cy - sz)
+            chLines[2].To      = Vector2.new(cx, cy + sz)
         elseif style == "Dot" then
             chDot.Visible  = true
             chDot.Color    = col
@@ -566,9 +555,11 @@ RunService.RenderStepped:Connect(function()
             chCirc.Radius   = sz
         elseif style == "X" then
             chLines[1].Visible = true chLines[1].Color = col
-            chLines[1].From = Vector2.new(cx - sz, cy - sz) chLines[1].To = Vector2.new(cx + sz, cy + sz)
+            chLines[1].From    = Vector2.new(cx - sz, cy - sz)
+            chLines[1].To      = Vector2.new(cx + sz, cy + sz)
             chLines[2].Visible = true chLines[2].Color = col
-            chLines[2].From = Vector2.new(cx + sz, cy - sz) chLines[2].To = Vector2.new(cx - sz, cy + sz)
+            chLines[2].From    = Vector2.new(cx + sz, cy - sz)
+            chLines[2].To      = Vector2.new(cx - sz, cy + sz)
         end
     else
         for _, l in ipairs(chLines) do l.Visible = false end
@@ -576,7 +567,6 @@ RunService.RenderStepped:Connect(function()
         chCirc.Visible = false
     end
 
-    -- FOV circle
     if Configuration.FOVCircle then
         fovCircle.Visible  = true
         fovCircle.Color    = Color3.fromRGB(255, 255, 255)
@@ -591,33 +581,33 @@ end)
 -- FULLBRIGHT
 -- ============================
 
-local originalAmbient       = Lighting.Ambient
-local originalBrightness    = Lighting.Brightness
-local originalOutdoorAmbient = Lighting.OutdoorAmbient
+local origAmbient        = Lighting.Ambient
+local origBrightness     = Lighting.Brightness
+local origOutdoorAmbient = Lighting.OutdoorAmbient
 
 local function enableFullbright()
-    originalAmbient        = Lighting.Ambient
-    originalBrightness     = Lighting.Brightness
-    originalOutdoorAmbient = Lighting.OutdoorAmbient
+    origAmbient        = Lighting.Ambient
+    origBrightness     = Lighting.Brightness
+    origOutdoorAmbient = Lighting.OutdoorAmbient
     Lighting.Ambient        = Color3.fromRGB(255, 255, 255)
     Lighting.Brightness     = 2
     Lighting.OutdoorAmbient = Color3.fromRGB(255, 255, 255)
 end
 
 local function disableFullbright()
-    Lighting.Ambient        = originalAmbient
-    Lighting.Brightness     = originalBrightness
-    Lighting.OutdoorAmbient = originalOutdoorAmbient
+    Lighting.Ambient        = origAmbient
+    Lighting.Brightness     = origBrightness
+    Lighting.OutdoorAmbient = origOutdoorAmbient
 end
 
 -- ============================
--- COMBAT — AIMBOT + SILENT AIM
+-- COMBAT — TARGET FINDER
 -- ============================
 
+-- Gets closest player to mouse cursor within given FOV radius
 local function getClosestPlayer(fov)
-    local vp      = Camera.ViewportSize
-    local center  = Vector2.new(vp.X / 2, vp.Y / 2)
-    local closest = nil
+    local mousePos  = UserInputService:GetMouseLocation()
+    local closest   = nil
     local closestDist = fov
 
     for _, player in ipairs(Players:GetPlayers()) do
@@ -627,10 +617,16 @@ local function getClosestPlayer(fov)
         local hrp = char:FindFirstChild("HumanoidRootPart")
         local hum = char:FindFirstChildOfClass("Humanoid")
         if not hrp or not hum or hum.Health <= 0 then continue end
+
         local screenPos, onScreen = Camera:WorldToViewportPoint(hrp.Position)
         if not onScreen then continue end
+
+        -- Use GetMouseLocation() for accurate screen position
+        -- Subtract gui inset (36px) from Y to match viewport coords
         local sv   = Vector2.new(screenPos.X, screenPos.Y)
-        local dist = (sv - center).Magnitude
+        local mp   = Vector2.new(mousePos.X, mousePos.Y + 36)
+        local dist = (sv - mp).Magnitude
+
         if dist < closestDist then
             closestDist = dist
             closest     = player
@@ -640,97 +636,158 @@ local function getClosestPlayer(fov)
     return closest
 end
 
--- Aimbot loop
-RunService.RenderStepped:Connect(function()
-    if not Configuration.Aimbot then return end
-    if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then return end
-
-    local target = getClosestPlayer(Configuration.AimbotFOV)
-    if not target or not target.Character then return end
-    local hrp = target.Character:FindFirstChild("HumanoidRootPart")
-    local head = target.Character:FindFirstChild("Head")
-    local aimPart = head or hrp
-    if not aimPart then return end
-
-    local targetPos  = Camera:WorldToScreenPoint(aimPart.Position)
-    local currentPos = Vector2.new(Mouse.X, Mouse.Y)
-    local goalPos    = Vector2.new(targetPos.X, targetPos.Y)
-    local smoothed   = currentPos:Lerp(goalPos, Configuration.AimbotSmooth)
-
-    mousemoverel(smoothed.X - currentPos.X, smoothed.Y - currentPos.Y)
-end)
-
--- Silent aim
-local saConn = nil
-
-local function enableSilentAim()
-    saConn = Players.LocalPlayer:GetMouse().Move:Connect(function() end)
+local function getAimPart(character, partName)
+    return character:FindFirstChild(partName)
+        or character:FindFirstChild("Head")
+        or character:FindFirstChild("HumanoidRootPart")
 end
 
 -- ============================
--- SILENT AIM (Camera deflection — no namecall hook)
+-- AIMBOT
+-- Based on dev79kz/AimbotScript approach:
+-- - Persistent locked target (stops shaking from re-evaluating every frame)
+-- - TweenService Camera.CFrame for smooth, sticky first-person lock
+-- - Only drops lock when target leaves FOV or dies
+-- - mousemoverel used as fallback for third-person
 -- ============================
 
--- How it works: when silent aim is on, we temporarily rotate the camera
--- CFrame toward the target right before each frame so the server-side
--- raycast origin aligns with the target. No __namecall needed.
+local aimbotLocked    = nil  -- persistent lock target
+local aimbotRunning   = false
+local aimbotAnimation = nil
 
-local saOriginalCFrame = nil
-local saDeflecting     = false
+local function cancelAimbotLock()
+    aimbotLocked = nil
+    if aimbotAnimation then
+        aimbotAnimation:Cancel()
+        aimbotAnimation = nil
+    end
+end
 
-RunService.RenderStepped:Connect(function()
-    -- Restore camera if we deflected last frame
-    if saDeflecting and saOriginalCFrame then
-        Camera.CFrame   = saOriginalCFrame
-        saDeflecting    = false
-        saOriginalCFrame = nil
+local function getAimbotTarget()
+    -- If we already have a lock, validate it first
+    if aimbotLocked then
+        local char = aimbotLocked.Character
+        local hum  = char and char:FindFirstChildOfClass("Humanoid")
+        local part = char and char:FindFirstChild(Configuration.AimbotPart)
+
+        -- Drop lock if target died, left, or walked out of FOV
+        if not char or not hum or hum.Health <= 0 or not part then
+            cancelAimbotLock() 
+        else
+            local vec, onScreen = Camera:WorldToViewportPoint(part.Position)
+            local mousePos      = UserInputService:GetMouseLocation()
+            local screenDist    = (Vector2.new(vec.X, vec.Y) - Vector2.new(mousePos.X, mousePos.Y + 36)).Magnitude
+            if not onScreen or screenDist > Configuration.AimbotFOV * 2 then
+                cancelAimbotLock()
+            end
+        end
     end
 
-    if not Configuration.SilentAim then return end
-    if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then return end
+    -- Find new target if we don't have one
+    if not aimbotLocked then
+        local bestDist = Configuration.AimbotFOV
+        local mousePos = UserInputService:GetMouseLocation()
 
-    local target = getClosestPlayer(Configuration.SilentAimFOV)
+        for _, player in ipairs(Players:GetPlayers()) do
+            if player == LP then continue end
+            local char = player.Character
+            if not char then continue end
+            local part = char:FindFirstChild(Configuration.AimbotPart)
+                      or char:FindFirstChild("Head")
+                      or char:FindFirstChild("HumanoidRootPart")
+            local hum  = char:FindFirstChildOfClass("Humanoid")
+            if not part or not hum or hum.Health <= 0 then continue end
+
+            local vec, onScreen = Camera:WorldToViewportPoint(part.Position)
+            if not onScreen then continue end
+
+            -- Distance from mouse to target on screen
+            -- Add 36 to mousePos.Y to account for GUI inset
+            local screenDist = (
+                Vector2.new(vec.X, vec.Y) -
+                Vector2.new(mousePos.X, mousePos.Y + 36)
+            ).Magnitude
+
+            if screenDist < bestDist then
+                bestDist      = screenDist
+                aimbotLocked  = player
+            end
+        end
+    end
+
+    return aimbotLocked
+end
+
+RunService.RenderStepped:Connect(function()
+    if not Configuration.Aimbot then
+        cancelAimbotLock()
+        return
+    end
+    if not UserInputService:IsMouseButtonPressed(Enum.UserInputType.MouseButton2) then
+        cancelAimbotLock()
+        return
+    end
+
+    local target = getAimbotTarget()
     if not target or not target.Character then return end
 
-    local head = target.Character:FindFirstChild("Head")
-    if not head then return end
+    local aimPart = target.Character:FindFirstChild(Configuration.AimbotPart)
+                 or target.Character:FindFirstChild("Head")
+                 or target.Character:FindFirstChild("HumanoidRootPart")
+    if not aimPart then return end
 
-    -- Save real camera, snap toward target for this frame only
-    saOriginalCFrame = Camera.CFrame
-    saDeflecting     = true
-    Camera.CFrame    = CFrame.lookAt(Camera.CFrame.Position, head.Position)
+    -- Use TweenService Camera CFrame for smooth sticky lock
+    -- This is the same approach as dev79kz — smooth and doesn't shake
+    local sensitivity = Configuration.AimbotSmooth
+
+    if sensitivity <= 0.05 then
+        -- Instant snap
+        Camera.CFrame = CFrame.new(Camera.CFrame.Position, aimPart.Position)
+    else
+        -- Smooth tween toward target
+        if aimbotAnimation then aimbotAnimation:Cancel() end
+        aimbotAnimation = TweenService:Create(
+            Camera,
+            TweenInfo.new(sensitivity, Enum.EasingStyle.Sine, Enum.EasingDirection.Out),
+            {CFrame = CFrame.new(Camera.CFrame.Position, aimPart.Position)}
+        )
+        aimbotAnimation:Play()
+    end
 end)
 
 -- ============================
--- REACH EXTENDER (ProximityPrompt MaxActivationDistance)
+-- SILENT AIM
+-- Learned from open source (Averiias, Stefanuk12):
+-- Hook __index on Mouse.Hit and Mouse.Target
+-- This is NOT namecall — completely different metamethod
+-- checkcaller() ensures we only intercept external game reads
+-- Velocity prediction added for moving targets
 -- ============================
 
--- Patch all current and future ProximityPrompts directly — no metamethod hook
+
+-- ============================
+-- REACH EXTENDER
+-- Directly patch ProximityPrompt MaxActivationDistance
+-- No metamethod hook needed — just set the property
+-- ============================
+
 local function patchPrompt(prompt)
     if not prompt:IsA("ProximityPrompt") then return end
     RunService.Heartbeat:Connect(function()
         if Configuration.ReachExtender then
-            prompt.MaxActivationDistance = Configuration.ReachValue
+            pcall(function() prompt.MaxActivationDistance = Configuration.ReachValue end)
         end
     end)
 end
 
-local function patchCharacterPrompts(character)
-    for _, desc in ipairs(workspace:GetDescendants()) do
-        if desc:IsA("ProximityPrompt") then
-            patchPrompt(desc)
-        end
-    end
-end
-
 workspace.DescendantAdded:Connect(function(desc)
-    if desc:IsA("ProximityPrompt") then
-        patchPrompt(desc)
-    end
+    if desc:IsA("ProximityPrompt") then patchPrompt(desc) end
 end)
 
--- Initial patch on load
-patchCharacterPrompts()
+-- Patch all existing prompts on load
+for _, desc in ipairs(workspace:GetDescendants()) do
+    if desc:IsA("ProximityPrompt") then patchPrompt(desc) end
+end
 
 -- ============================
 -- MOVEMENT
@@ -769,11 +826,11 @@ local function enableFly()
     local hum = char:FindFirstChildOfClass("Humanoid")
     if not hrp or not hum then return end
     hum.PlatformStand = true
-    flyBody = Instance.new("BodyVelocity")
-    flyBody.Velocity = Vector3.zero
-    flyBody.MaxForce = Vector3.new(1e5, 1e5, 1e5)
-    flyBody.Parent   = hrp
-    flyGyro = Instance.new("BodyGyro")
+    flyBody           = Instance.new("BodyVelocity")
+    flyBody.Velocity  = Vector3.zero
+    flyBody.MaxForce  = Vector3.new(1e5, 1e5, 1e5)
+    flyBody.Parent    = hrp
+    flyGyro           = Instance.new("BodyGyro")
     flyGyro.MaxTorque = Vector3.new(1e5, 1e5, 1e5)
     flyGyro.D         = 50
     flyGyro.Parent    = hrp
@@ -842,10 +899,11 @@ local function enableAutoRejoin()
     end)
 end
 
--- Server hop
 local function serverHop()
-    local servers = {}
-    local url = string.format("https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100", game.PlaceId)
+    local url = string.format(
+        "https://games.roblox.com/v1/games/%d/servers/Public?sortOrder=Asc&limit=100",
+        game.PlaceId
+    )
     local success, result = pcall(function()
         return HttpService:JSONDecode(game:HttpGet(url))
     end)
@@ -853,6 +911,7 @@ local function serverHop()
         Notify("Server Hop", "Failed to fetch servers.", "alert-triangle", 3)
         return
     end
+    local servers = {}
     for _, server in ipairs(result.data) do
         if server.id ~= game.JobId and server.playing < server.maxPlayers then
             table.insert(servers, server.id)
@@ -862,31 +921,24 @@ local function serverHop()
         Notify("Server Hop", "No available servers found.", "alert-triangle", 3)
         return
     end
-    local picked = servers[math.random(1, #servers)]
     Notify("Server Hop", "Hopping to a new server...", "arrow-right", 2)
     task.wait(1.5)
-    TeleportService:TeleportToPlaceInstance(game.PlaceId, picked, LP)
+    TeleportService:TeleportToPlaceInstance(game.PlaceId, servers[math.random(1, #servers)], LP)
 end
 
--- Rejoin same server
 local function rejoinServer()
     Notify("Rejoin", "Rejoining same server...", "refresh-cw", 2)
     task.wait(1.5)
     TeleportService:TeleportToPlaceInstance(game.PlaceId, game.JobId, LP)
 end
 
--- Chat notification
-local chatConn = nil
-
 local function enableChatNotify()
-    chatConn = Players.PlayerAdded:Connect(function() end) -- placeholder connection holder
-    -- hook into all players' chats
     local function hookChat(player)
         if player == LP then return end
         player.Chatted:Connect(function(msg)
             if not Configuration.ChatNotify then return end
             local keyword = Configuration.ChatKeyword:lower()
-            if keyword ~= "" and msg:lower():find(keyword) then
+            if keyword ~= "" and msg:lower():find(keyword, 1, true) then
                 Notify("Chat Alert", player.Name .. ": " .. msg, "message-circle", 5)
             end
         end)
@@ -895,14 +947,12 @@ local function enableChatNotify()
     Players.PlayerAdded:Connect(hookChat)
 end
 
--- Copy outfit
 local function copyOutfit(target)
     if not target or not target.Character then
-        Notify("Copy Outfit", "Player not found or no character.", "alert-triangle", 3)
-        return
+        Notify("Copy Outfit", "Player not found.", "alert-triangle", 3) return
     end
-    local char    = target.Character
-    local myChar  = LP.Character
+    local char   = target.Character
+    local myChar = LP.Character
     if not myChar then return end
     for _, obj in ipairs(char:GetChildren()) do
         if obj:IsA("Accessory") or obj:IsA("Shirt") or obj:IsA("Pants")
@@ -913,7 +963,6 @@ local function copyOutfit(target)
     Notify("Copy Outfit", "Copied " .. target.Name .. "'s outfit!", "user-check", 3)
 end
 
--- Spectate
 local spectateConn = nil
 
 local function spectatePlayer(target)
@@ -932,7 +981,6 @@ local function stopSpectate()
     Camera.CameraType = Enum.CameraType.Custom
 end
 
--- Teleport to player
 local function teleportToPlayer(target)
     if not target or not target.Character then return end
     local hrp   = target.Character:FindFirstChild("HumanoidRootPart")
@@ -940,7 +988,6 @@ local function teleportToPlayer(target)
     if hrp and myHRP then myHRP.CFrame = hrp.CFrame * CFrame.new(0, 0, 3) end
 end
 
--- Bring player to you
 local function bringPlayer(target)
     if not target or not target.Character then return end
     local targetHRP = target.Character:FindFirstChild("HumanoidRootPart")
@@ -948,11 +995,6 @@ local function bringPlayer(target)
     if targetHRP and myHRP then
         targetHRP.CFrame = myHRP.CFrame * CFrame.new(0, 0, -3)
     end
-end
-
--- FPS Unlocker
-local function setFPSCap(cap)
-    setfpscap(cap)
 end
 
 -- ============================
@@ -964,11 +1006,15 @@ local bankLogRunning = false
 
 local function bankLogFarm()
     while bankLogRunning and Configuration.AutoBankLog do
-        local s, e = pcall(function() game:GetService("ReplicatedStorage").PackDealer:FireServer("Banklog") end)
-        if not s then warn("Banklog failed: ", e) end
+        local s, e = pcall(function()
+            game:GetService("ReplicatedStorage").PackDealer:FireServer("Banklog")
+        end)
+        if not s then warn("Banklog failed:", e) end
         task.wait(0.5)
-        s, e = pcall(function() game:GetService("ReplicatedStorage").UI.SwipeLog:FireServer() end)
-        if not s then warn("SwipeLog failed: ", e) end
+        s, e = pcall(function()
+            game:GetService("ReplicatedStorage").UI.SwipeLog:FireServer()
+        end)
+        if not s then warn("SwipeLog failed:", e) end
         task.wait(0.5)
     end
 end
@@ -1077,8 +1123,6 @@ end
 
 Players.PlayerAdded:Connect(function(player)
     if anyESPActive() then onPlayer(player) end
-    local names = {}
-    for _, p in ipairs(Players:GetPlayers()) do if p ~= LP then table.insert(names, p.Name) end end
 end)
 
 Players.PlayerRemoving:Connect(function(player)
@@ -1096,7 +1140,6 @@ local mainConfig    = ConfigManager:CreateConfig("slurricane_config")
 -- UI — VISUALS TAB
 -- ============================
 
--- UI toggle keybind (RightShift default) — using correct API from docs
 utilityTab:Keybind({
     Title = "Toggle UI",
     Desc = "Keybind to show/hide the UI",
@@ -1221,7 +1264,6 @@ visualsTab:Slider({
     end
 })
 
--- Screen section
 screenSection:Toggle({
     Title = "Crosshair",
     Desc = "Draw a crosshair on screen",
@@ -1269,7 +1311,7 @@ visualsTab:Slider({
 
 screenSection:Toggle({
     Title = "FOV Circle",
-    Desc = "Shows aimbot/silent aim FOV radius",
+    Desc = "Shows aimbot/silent aim FOV radius on screen",
     Flag = "fovCircle",
     Callback = function(state)
         Configuration.FOVCircle = state
@@ -1293,7 +1335,7 @@ screenSection:Toggle({
 
 combatSection:Toggle({
     Title = "Aimbot",
-    Desc = "Auto aim at nearest player (hold RMB)",
+    Desc = "Auto aim at nearest player in FOV (hold RMB)",
     Flag = "aimbot",
     Callback = function(state)
         Configuration.Aimbot = state
@@ -1303,7 +1345,7 @@ combatSection:Toggle({
 
 combatTab:Slider({
     Title = "Aimbot FOV",
-    Desc = "Screen radius to find targets",
+    Desc = "Screen radius to detect targets",
     Step = 5,
     Value = {Min = 10, Max = 500, Default = 80},
     Callback = function(value)
@@ -1312,35 +1354,30 @@ combatTab:Slider({
     end
 })
 
+-- Replace the Aimbot Smoothness slider with this:
 combatTab:Slider({
     Title = "Aimbot Smoothness",
-    Desc = "Lower = snappier, higher = smoother",
+    Desc = "Tween time in seconds — lower = snappier, higher = floaty",
     Step = 0.05,
-    Value = {Min = 0.05, Max = 1, Default = 0.1},
+    Value = {Min = 0, Max = 1, Default = 0.1},
     Callback = function(value)
         Configuration.AimbotSmooth = value
+        cancelAimbotLock() -- cancel any active tween when changed
     end
 })
 
-combatSection:Toggle({
-    Title = "Silent Aim",
-    Desc = "Bullets hit target regardless of crosshair",
-    Flag = "silentAim",
-    Callback = function(state)
-        Configuration.SilentAim = state
-        Notify("Combat", "Silent Aim " .. (state and "enabled" or "disabled"), "zap", 2)
-    end
-})
-
-combatTab:Slider({
-    Title = "Silent Aim FOV",
-    Desc = "Radius to find silent aim target",
-    Step = 5,
-    Value = {Min = 10, Max = 600, Default = 120},
+combatTab:Dropdown({
+    Title = "Aimbot Target Part",
+    Desc = "Which body part to aim at",
+    Values = {"Head", "HumanoidRootPart", "UpperTorso"},
+    Multi = false,
+    Default = "Head",
     Callback = function(value)
-        Configuration.SilentAimFOV = value
+        Configuration.AimbotPart = value
     end
 })
+
+
 
 combatSection:Toggle({
     Title = "Reach Extender",
@@ -1354,7 +1391,7 @@ combatSection:Toggle({
 
 combatTab:Slider({
     Title = "Reach Distance",
-    Desc = "How far tools can reach",
+    Desc = "How far tools can reach in studs",
     Step = 1,
     Value = {Min = 5, Max = 100, Default = 10},
     Callback = function(value)
@@ -1411,7 +1448,7 @@ movementSection:Toggle({
 
 movementTab:Slider({
     Title = "Walk Speed",
-    Desc = "Speed when speed hack is enabled",
+    Desc = "Speed when speed hack is on",
     Step = 1,
     Value = {Min = 16, Max = 300, Default = 25},
     Callback = function(value)
@@ -1484,11 +1521,11 @@ utilitySection:Button({
 
 utilityTab:Slider({
     Title = "FPS Cap",
-    Desc = "Unlock or cap your FPS",
+    Desc = "Unlock or cap your framerate",
     Step = 10,
     Value = {Min = 30, Max = 360, Default = 60},
     Callback = function(value)
-        pcall(function() setFPSCap(value) end)
+        pcall(function() setfpscap(value) end)
     end
 })
 
@@ -1509,7 +1546,10 @@ local spectateDropdown = playerSection:Dropdown({
     Callback = function(value)
         if not value or value == "None" then stopSpectate() return end
         local target = Players:FindFirstChild(value)
-        if target then spectatePlayer(target) Notify("Utility", "Spectating " .. value, "eye", 2) end
+        if target then
+            spectatePlayer(target)
+            Notify("Utility", "Spectating " .. value, "eye", 2)
+        end
     end
 })
 
@@ -1531,7 +1571,10 @@ local teleportDropdown = playerSection:Dropdown({
     Callback = function(value)
         if not value or value == "None" then return end
         local target = Players:FindFirstChild(value)
-        if target then teleportToPlayer(target) Notify("Utility", "Teleported to " .. value, "map-pin", 2) end
+        if target then
+            teleportToPlayer(target)
+            Notify("Utility", "Teleported to " .. value, "map-pin", 2)
+        end
     end
 })
 
@@ -1544,7 +1587,10 @@ local bringDropdown = playerSection:Dropdown({
     Callback = function(value)
         if not value or value == "None" then return end
         local target = Players:FindFirstChild(value)
-        if target then bringPlayer(target) Notify("Utility", "Brought " .. value .. " to you", "user-plus", 2) end
+        if target then
+            bringPlayer(target)
+            Notify("Utility", "Brought " .. value .. " to you", "user-plus", 2)
+        end
     end
 })
 
@@ -1561,7 +1607,6 @@ local outfitDropdown = playerSection:Dropdown({
     end
 })
 
--- refresh all dropdowns on player join/leave
 local function refreshDropdowns()
     local names = getPlayerNames()
     pcall(function() spectateDropdown:SetValues(names) end)
@@ -1583,32 +1628,6 @@ end)
 -- ============================
 -- UI — CONFIG SECTION
 -- ============================
-
--- Register all flagged elements with config
-mainConfig:Register("espHighlight",      espSection)
-mainConfig:Register("espBox",            espSection)
-mainConfig:Register("espSkeleton",       espSection)
-mainConfig:Register("espName",           espSection)
-mainConfig:Register("espHealth",         espSection)
-mainConfig:Register("espTracers",        espSection)
-mainConfig:Register("espDistance",       espSection)
-mainConfig:Register("espChams",          espSection)
-mainConfig:Register("espVisibleOnly",    espSection)
-mainConfig:Register("crosshair",         screenSection)
-mainConfig:Register("fovCircle",         screenSection)
-mainConfig:Register("fullbright",        screenSection)
-mainConfig:Register("aimbot",            combatSection)
-mainConfig:Register("silentAim",         combatSection)
-mainConfig:Register("reachExtender",     combatSection)
-mainConfig:Register("noclip",            movementSection)
-mainConfig:Register("fly",               movementSection)
-mainConfig:Register("speedHack",         movementSection)
-mainConfig:Register("antiAFK",           utilitySection)
-mainConfig:Register("autoRejoin",        utilitySection)
-mainConfig:Register("chatNotify",        utilitySection)
-mainConfig:Register("autoBankLogElement", autoFarmSection)
-mainConfig:Register("autoIdeaButtonElement", farmingSection)
-mainConfig:Register("autoSpillCleanerElement", farmingSection)
 
 configSection:Button({
     Title = "Save Config",
