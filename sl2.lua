@@ -13,21 +13,22 @@ local Camera = workspace.CurrentCamera
 
 -- Configuration
 local Configuration = {
-    -- Visuals
-    ShowESP = false,
-    
-    -- Farming
-    AutoIdea = false,
+    ESP_Highlight = false,
+    ESP_Box       = false,
+    ESP_Skeleton  = false,
+    ESP_Name      = false,
+    ESP_Health    = false,
+    AutoIdea        = false,
     AutoSpillCleaner = false,
-    AutoBankLog = false,
+    AutoBankLog     = false,
 }
 
 -- Window setup
 local window = windUI:CreateWindow({
-    Title = "sweetdreams.og",
+    Title = "slurricane.dev",
     Icon = "door-open",
     Author = "cerebrum mortuus est emplastrum",
-    Folder = "sweetdreams",
+    Folder = "slurricane",
     Size = UDim2.fromOffset(580, 460),
     MinSize = Vector2.new(560, 350),
     MaxSize = Vector2.new(850, 560),
@@ -46,7 +47,7 @@ window:EditOpenButton({
     CornerRadius = UDim.new(0, 16),
     StrokeThickness = 2,
     Color = ColorSequence.new(
-    Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
+        Color3.fromHex("FF0F7B"), Color3.fromHex("F89B29")),
     OnlyMobile = false,
     Enabled = true,
     Draggable = true,
@@ -60,8 +61,8 @@ local farmingTab = window:Tab({Title = "Farming", Icon = "lucide:cpu"})
 visualsTab:Select()
 
 -- Sections
-local visualsSection = visualsTab:Section({
-    Title = "visuals",
+local espSection = visualsTab:Section({
+    Title = "esp",
     Box = true,
     TextTransparency = 0.05,
     TextXAlignment = "Left",
@@ -88,98 +89,333 @@ local autoFarmSection = farmingTab:Section({
 })
 
 -- ============================
--- HIGHLIGHT ESP
+-- ESP HELPERS
 -- ============================
 
-local function applyHighlight(character)
-    local highlight = Instance.new("Highlight")
-    highlight.Name = "DebugHighlight"
-    highlight.FillTransparency = 0.5
-    highlight.OutlineTransparency = 0
-    highlight.DepthMode = Enum.HighlightDepthMode.AlwaysOnTop
-    highlight.Parent = character
-end
-
-local function removeHighlight(character)
-    local highlight = character:FindFirstChild("DebugHighlight")
-    if highlight then
-        highlight:Destroy()
-    end
-end
-
+local ESPConnections    = {}
+local ESPDrawings       = {}
 local playerConnections = {}
 
-local function onPlayer(player)
-    if player == LP then return end
+local function newText(size, color)
+    local t = Drawing.new("Text")
+    t.Visible      = false
+    t.Size         = size
+    t.Color        = color
+    t.Center       = true
+    t.Outline      = true
+    t.OutlineColor = Color3.fromRGB(0, 0, 0)
+    t.Font         = Drawing.Fonts.UI
+    return t
+end
 
-    if player.Character then
-        if Configuration.ShowESP then
-            applyHighlight(player.Character)
-        end
+local function newLine(color, thickness)
+    local l = Drawing.new("Line")
+    l.Visible   = false
+    l.Color     = color
+    l.Thickness = thickness or 1
+    return l
+end
+
+local function newQuad(color, thickness)
+    local q = Drawing.new("Quad")
+    q.Visible   = false
+    q.Color     = color
+    q.Thickness = thickness or 1.5
+    q.Filled    = false
+    return q
+end
+
+local function healthColor(pct)
+    if pct > 0.6 then
+        return Color3.fromRGB(0, 255, 80)
+    elseif pct > 0.3 then
+        return Color3.fromRGB(255, 165, 0)
+    else
+        return Color3.fromRGB(255, 50, 50)
+    end
+end
+
+local BONES = {
+    {"Head",          "UpperTorso"},
+    {"UpperTorso",    "LowerTorso"},
+    {"UpperTorso",    "LeftUpperArm"},
+    {"LeftUpperArm",  "LeftLowerArm"},
+    {"LeftLowerArm",  "LeftHand"},
+    {"UpperTorso",    "RightUpperArm"},
+    {"RightUpperArm", "RightLowerArm"},
+    {"RightLowerArm", "RightHand"},
+    {"LowerTorso",    "LeftUpperLeg"},
+    {"LeftUpperLeg",  "LeftLowerLeg"},
+    {"LeftLowerLeg",  "LeftFoot"},
+    {"LowerTorso",    "RightUpperLeg"},
+    {"RightUpperLeg", "RightLowerLeg"},
+    {"RightLowerLeg", "RightFoot"},
+}
+
+local function createESPDrawings(player)
+    local boneLines = {}
+    for i = 1, #BONES do
+        boneLines[i] = newLine(Color3.fromRGB(255, 255, 255), 1)
     end
 
-    playerConnections[player] = player.CharacterAdded:Connect(function(character)
-        if Configuration.ShowESP then
-            applyHighlight(character)
+    local drawings = {
+        Name   = newText(14, Color3.fromRGB(255, 255, 255)),
+        Health = newText(12, Color3.fromRGB(0, 255, 80)),
+        BarBG  = newLine(Color3.fromRGB(30, 30, 30), 4),
+        BarFG  = newLine(Color3.fromRGB(0, 255, 80), 4),
+        Box    = newQuad(Color3.fromRGB(255, 255, 255), 1.5),
+        Bones  = boneLines,
+    }
+
+    ESPDrawings[player] = drawings
+    return drawings
+end
+
+local function removeESPDrawings(player)
+    local d = ESPDrawings[player]
+    if not d then return end
+    for k, v in pairs(d) do
+        if k == "Bones" then
+            for _, line in ipairs(v) do pcall(function() line:Remove() end) end
+        else
+            pcall(function() v:Remove() end)
+        end
+    end
+    ESPDrawings[player] = nil
+end
+
+local function hideDrawings(d)
+    d.Name.Visible   = false
+    d.Health.Visible = false
+    d.BarBG.Visible  = false
+    d.BarFG.Visible  = false
+    d.Box.Visible    = false
+    for _, l in ipairs(d.Bones) do l.Visible = false end
+end
+
+local function anyESPActive()
+    return Configuration.ESP_Highlight
+        or Configuration.ESP_Box
+        or Configuration.ESP_Skeleton
+        or Configuration.ESP_Name
+        or Configuration.ESP_Health
+end
+
+-- ============================
+-- ESP RENDER LOOP
+-- ============================
+
+local function startESPRender(player)
+    if ESPConnections[player] then
+        ESPConnections[player]:Disconnect()
+        ESPConnections[player] = nil
+    end
+
+    local drawings = ESPDrawings[player] or createESPDrawings(player)
+
+    ESPConnections[player] = RunService.RenderStepped:Connect(function()
+        if not anyESPActive() then
+            hideDrawings(drawings)
+            return
+        end
+
+        local char = player.Character
+        if not char then hideDrawings(drawings) return end
+
+        local hrp  = char:FindFirstChild("HumanoidRootPart")
+        local head = char:FindFirstChild("Head")
+        local hum  = char:FindFirstChildOfClass("Humanoid")
+
+        if not hrp or not head or not hum or hum.Health <= 0 then
+            hideDrawings(drawings)
+            return
+        end
+
+        local headTopWorld = head.Position + Vector3.new(0, head.Size.Y / 2 + 0.3, 0)
+        local feetWorld    = hrp.Position  - Vector3.new(0, 3, 0)
+
+        local sHead, visHead = Camera:WorldToViewportPoint(headTopWorld)
+        local sFeet          = Camera:WorldToViewportPoint(feetWorld)
+
+        if not visHead then hideDrawings(drawings) return end
+
+        local hV   = Vector2.new(sHead.X, sHead.Y)
+        local fV   = Vector2.new(sFeet.X, sFeet.Y)
+        local boxH = math.abs(fV.Y - hV.Y)
+        local boxW = boxH * 0.5
+
+        local pct = math.clamp(hum.Health / math.max(hum.MaxHealth, 1), 0, 1)
+        local col = healthColor(pct)
+
+        -- Box
+        if Configuration.ESP_Box then
+            drawings.Box.Visible = true
+            drawings.Box.PointA  = Vector2.new(hV.X - boxW / 2, hV.Y)
+            drawings.Box.PointB  = Vector2.new(hV.X + boxW / 2, hV.Y)
+            drawings.Box.PointC  = Vector2.new(fV.X + boxW / 2, fV.Y)
+            drawings.Box.PointD  = Vector2.new(fV.X - boxW / 2, fV.Y)
+        else
+            drawings.Box.Visible = false
+        end
+
+        -- Health bar
+        if Configuration.ESP_Health then
+            local barX = hV.X + boxW / 2 + 5
+            drawings.BarBG.Visible = true
+            drawings.BarBG.From    = Vector2.new(barX, hV.Y)
+            drawings.BarBG.To      = Vector2.new(barX, fV.Y)
+            drawings.BarFG.Visible = true
+            drawings.BarFG.Color   = col
+            drawings.BarFG.From    = Vector2.new(barX, fV.Y)
+            drawings.BarFG.To      = Vector2.new(barX, fV.Y - (fV.Y - hV.Y) * pct)
+            drawings.Health.Visible  = true
+            drawings.Health.Color    = col
+            drawings.Health.Text     = string.format("%d / %d", math.floor(hum.Health), math.floor(hum.MaxHealth))
+            drawings.Health.Position = Vector2.new(hV.X, fV.Y + 4)
+        else
+            drawings.BarBG.Visible  = false
+            drawings.BarFG.Visible  = false
+            drawings.Health.Visible = false
+        end
+
+        -- Name
+        if Configuration.ESP_Name then
+            drawings.Name.Visible  = true
+            drawings.Name.Text     = player.Name
+            drawings.Name.Position = Vector2.new(hV.X, hV.Y - 18)
+        else
+            drawings.Name.Visible = false
+        end
+
+        -- Skeleton
+        for i, bone in ipairs(BONES) do
+            local line = drawings.Bones[i]
+            if Configuration.ESP_Skeleton then
+                local partA = char:FindFirstChild(bone[1])
+                local partB = char:FindFirstChild(bone[2])
+                if partA and partB then
+                    local sA, visA = Camera:WorldToViewportPoint(partA.Position)
+                    local sB, visB = Camera:WorldToViewportPoint(partB.Position)
+                    if visA and visB then
+                        line.Visible = true
+                        line.Color   = col
+                        line.From    = Vector2.new(sA.X, sA.Y)
+                        line.To      = Vector2.new(sB.X, sB.Y)
+                    else
+                        line.Visible = false
+                    end
+                else
+                    line.Visible = false
+                end
+            else
+                line.Visible = false
+            end
         end
     end)
 end
 
-local function enableESP()
-    for _, player in ipairs(Players:GetPlayers()) do
-        onPlayer(player)
-    end
+-- ============================
+-- HIGHLIGHT + PLAYER HOOKS
+-- ============================
+
+local function applyHighlight(character)
+    local existing = character:FindFirstChild("DebugHighlight")
+    if existing then existing:Destroy() end
+    local highlight = Instance.new("Highlight")
+    highlight.Name                = "DebugHighlight"
+    highlight.FillTransparency    = 0.5
+    highlight.OutlineTransparency = 0
+    highlight.DepthMode           = Enum.HighlightDepthMode.AlwaysOnTop
+    highlight.Parent              = character
 end
 
-local function disableESP()
+local function removeHighlight(character)
+    local h = character:FindFirstChild("DebugHighlight")
+    if h then h:Destroy() end
+end
+
+local function refreshHighlights()
     for _, player in ipairs(Players:GetPlayers()) do
         if player == LP then continue end
         if player.Character then
-            removeHighlight(player.Character)
-        end
-        if playerConnections[player] then
-            playerConnections[player]:Disconnect()
-            playerConnections[player] = nil
+            if Configuration.ESP_Highlight then
+                applyHighlight(player.Character)
+            else
+                removeHighlight(player.Character)
+            end
         end
     end
 end
 
-Players.PlayerAdded:Connect(function(player)
-    if Configuration.ShowESP then
-        onPlayer(player)
-    end
-end)
+local function onPlayer(player)
+    if player == LP then return end
 
-Players.PlayerRemoving:Connect(function(player)
+    if player.Character and Configuration.ESP_Highlight then
+        applyHighlight(player.Character)
+    end
+
+    startESPRender(player)
+
+    playerConnections[player] = player.CharacterAdded:Connect(function(character)
+        if Configuration.ESP_Highlight then applyHighlight(character) end
+        startESPRender(player)
+    end)
+end
+
+local function initAllPlayers()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if not ESPConnections[player] then
+            onPlayer(player)
+        end
+    end
+end
+
+local function cleanupPlayer(player)
+    if player.Character then removeHighlight(player.Character) end
+    if ESPConnections[player] then
+        ESPConnections[player]:Disconnect()
+        ESPConnections[player] = nil
+    end
+    removeESPDrawings(player)
     if playerConnections[player] then
         playerConnections[player]:Disconnect()
         playerConnections[player] = nil
     end
+end
+
+local function disableAllESP()
+    for _, player in ipairs(Players:GetPlayers()) do
+        if player == LP then continue end
+        cleanupPlayer(player)
+    end
+end
+
+Players.PlayerAdded:Connect(function(player)
+    if anyESPActive() then onPlayer(player) end
+end)
+
+Players.PlayerRemoving:Connect(function(player)
+    cleanupPlayer(player)
 end)
 
 -- ============================
 -- AUTO BANK LOG FARM
 -- ============================
 
-local bankLogThread = nil
+local bankLogThread  = nil
 local bankLogRunning = false
 
 local function bankLogFarm()
     while bankLogRunning and Configuration.AutoBankLog do
         local success, err = pcall(function()
-            local Event = game:GetService("ReplicatedStorage").PackDealer
-            Event:FireServer("Banklog")
+            game:GetService("ReplicatedStorage").PackDealer:FireServer("Banklog")
         end)
         if not success then warn("Banklog failed: ", err) end
-
         task.wait(0.5)
-
         success, err = pcall(function()
-            local Event = game:GetService("ReplicatedStorage").UI.SwipeLog
-            Event:FireServer()
+            game:GetService("ReplicatedStorage").UI.SwipeLog:FireServer()
         end)
         if not success then warn("SwipeLog failed: ", err) end
-
         task.wait(0.5)
     end
 end
@@ -187,24 +423,19 @@ end
 local function startBankLogFarm()
     if bankLogRunning then return end
     bankLogRunning = true
-    bankLogThread = task.spawn(bankLogFarm)
-    print("Auto Bank Log farm started")
+    bankLogThread  = task.spawn(bankLogFarm)
 end
 
 local function stopBankLogFarm()
     bankLogRunning = false
-    if bankLogThread then
-        coroutine.close(bankLogThread)
-        bankLogThread = nil
-    end
-    print("Auto Bank Log farm stopped")
+    if bankLogThread then coroutine.close(bankLogThread) bankLogThread = nil end
 end
 
 -- ============================
 -- SPORTS SHOP SPILL CLEANER
 -- ============================
 
-local spillCleanerThread = nil
+local spillCleanerThread  = nil
 local spillCleanerRunning = false
 
 local function getCharacter()
@@ -218,17 +449,13 @@ end
 
 local function teleportTo(position)
     local character = getCharacter()
-    local humanoidRootPart = character:FindFirstChild("HumanoidRootPart")
-    if humanoidRootPart then
-        humanoidRootPart.CFrame = CFrame.new(position)
-        task.wait(0.3)
-    end
+    local hrp = character:FindFirstChild("HumanoidRootPart")
+    if hrp then hrp.CFrame = CFrame.new(position) task.wait(0.3) end
 end
 
 local function cleanAllSpills()
     local spillSystem = workspace:FindFirstChild("SpillSystem")
     if not spillSystem then return end
-
     for _, child in ipairs(spillSystem:GetChildren()) do
         if not spillCleanerRunning then break end
         if child:IsA("BasePart") then
@@ -236,8 +463,7 @@ local function cleanAllSpills()
             if spillPrompt and spillPrompt:IsA("ProximityPrompt") then
                 teleportTo(child.Position)
                 fireproximityprompt(spillPrompt)
-                task.wait(3)
-                task.wait(1)
+                task.wait(4)
             end
         end
     end
@@ -253,30 +479,23 @@ end
 
 local function stopSpillCleaner()
     spillCleanerRunning = false
-    if spillCleanerThread then
-        coroutine.close(spillCleanerThread)
-        spillCleanerThread = nil
-    end
+    if spillCleanerThread then coroutine.close(spillCleanerThread) spillCleanerThread = nil end
 end
 
 -- ============================
--- AUTO IDEA (Farming)
+-- AUTO IDEA
 -- ============================
 
 local function AutoIdeaFunc()
     local replicatedStorage = game:GetService("ReplicatedStorage")
     local deliveryJob = replicatedStorage:FindFirstChild("UI") and
-                       replicatedStorage.UI:FindFirstChild("DeliveryJob")
-
-    if deliveryJob then
-        pcall(function() deliveryJob:FireServer("StartJob") end)
-    end
-
+                        replicatedStorage.UI:FindFirstChild("DeliveryJob")
+    if deliveryJob then pcall(function() deliveryJob:FireServer("StartJob") end) end
     wait(20)
 
     while Configuration.AutoIdea do
         local spot = nil
-        local trackingBlocks = workspace:FindFirstChild("TrackingBlocks")
+        local trackingBlocks    = workspace:FindFirstChild("TrackingBlocks")
         local deliveryJobFolder = workspace:FindFirstChild("DeliveryJob")
 
         if trackingBlocks and deliveryJobFolder then
@@ -319,36 +538,72 @@ local autoIdeaThread = nil
 -- UI ELEMENTS
 -- ============================
 
--- Visuals Tab
-visualsSection:Toggle({
-    Title = "Toggle ESP",
-    Flag = "espElement",
+espSection:Toggle({
+    Title = "Highlight",
+    Description = "Renders a highlight through walls",
+    Flag = "espHighlight",
     Callback = function(state)
-        Configuration.ShowESP = state
+        Configuration.ESP_Highlight = state
         if state then
-            enableESP()
+            initAllPlayers()
+            refreshHighlights()
         else
-            disableESP()
+            refreshHighlights()
+            if not anyESPActive() then disableAllESP() end
         end
     end
 })
 
--- Auto Farm Section
+espSection:Toggle({
+    Title = "Box",
+    Description = "2D bounding box around players",
+    Flag = "espBox",
+    Callback = function(state)
+        Configuration.ESP_Box = state
+        if state then initAllPlayers() elseif not anyESPActive() then disableAllESP() end
+    end
+})
+
+espSection:Toggle({
+    Title = "Skeleton",
+    Description = "Draws bones over the player rig",
+    Flag = "espSkeleton",
+    Callback = function(state)
+        Configuration.ESP_Skeleton = state
+        if state then initAllPlayers() elseif not anyESPActive() then disableAllESP() end
+    end
+})
+
+espSection:Toggle({
+    Title = "Name",
+    Description = "Shows player name above head",
+    Flag = "espName",
+    Callback = function(state)
+        Configuration.ESP_Name = state
+        if state then initAllPlayers() elseif not anyESPActive() then disableAllESP() end
+    end
+})
+
+espSection:Toggle({
+    Title = "Health",
+    Description = "Health bar and HP text",
+    Flag = "espHealth",
+    Callback = function(state)
+        Configuration.ESP_Health = state
+        if state then initAllPlayers() elseif not anyESPActive() then disableAllESP() end
+    end
+})
+
 autoFarmSection:Toggle({
     Title = "Auto Bank Log Farm",
     Description = "Automatically farms Banklog and SwipeLog",
     Flag = "autoBankLogElement",
     Callback = function(state)
         Configuration.AutoBankLog = state
-        if state then
-            startBankLogFarm()
-        else
-            stopBankLogFarm()
-        end
+        if state then startBankLogFarm() else stopBankLogFarm() end
     end
 })
 
--- Farming Tab
 farmingSection:Toggle({
     Title = "Auto Idea",
     Flag = "autoIdeaButtonElement",
@@ -377,4 +632,4 @@ farmingSection:Toggle({
     end
 })
 
-print("sweetdreams.og loaded - Farming & ESP only")
+print("slurricane.dev loaded")
